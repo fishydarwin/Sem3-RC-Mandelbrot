@@ -8,6 +8,14 @@ from threading import Thread
 from asyncio import Queue
 import socket
 from ast import literal_eval
+import argparse
+
+# command line arguments
+parser = argparse.ArgumentParser(prog='TCP Mandelbrot server', usage='server -port <PORT> -ip <OPTIONALIP>',description='TCP Mandelbrot server renderer.')
+parser.add_argument('-port', dest='port', default=1762, type=int, help="Port of the server")
+parser.add_argument('-dbg', dest='dbg', type=bool, default=False, help="Display debug information")
+
+args = parser.parse_args()
 
 # window size, a common set of parameters...
 resolution_x = 1000
@@ -23,7 +31,7 @@ epsilon = 0.0000001
 chunk_size = 0.05
 
 # bytes per region approximation
-bytes_per_region_approx = int(chunk_size ** 2 * resolution_x * resolution_y * 8)
+bytes_per_region_approx = int(chunk_size ** 2 * resolution_x * resolution_y * 12)
 
 print(int(resolution_x / (resolution_x * chunk_size)) * int(resolution_y / (resolution_y * chunk_size)))
 region_queue = Queue(int(resolution_x / (resolution_x * chunk_size)) * int(resolution_y / (resolution_y * chunk_size)))
@@ -31,13 +39,13 @@ region_queue = Queue(int(resolution_x / (resolution_x * chunk_size)) * int(resol
 def start_listen_thread():
     # boot up socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('', 1762))       # if you have trouble on OS X: lsof -i tcp:1762
+    sock.bind(("", args.port))       # if you have trouble on OS X: lsof -i tcp:1762
     sock.listen()
 
-    print("Bound to port 1762...")
-
-    input("Type anything and press enter to begin whenever you feel like it...")
+    print("Bound to port ", args.port)
+    input("Type anything and press enter to begin whenever you feel like it...\n >")
     print("Will start processing data to<->from connections!")
+    
     while True:
         # maybe a socket has arrived...
         client_sock, client_address = sock.accept()
@@ -64,32 +72,32 @@ def server_thread(client_socket):
             while True:
                 client_socket.sendall(repr(region).encode())
                 confirm = client_socket.recv(16).decode().strip()
+                
+                # confirm that client has correctly received the region
                 if confirm == "ok":
-                    print("Got confirmation, is OK")
                     break
-                print("Something went wrong, trying again...")
+                if(args.dbg):
+                    print("Failed to send region, trying again...")
 
             # wait to receive result
-            # this is, after all, an 2D RGB-tuple list...
-            # sort of like [[(255, 255, 255), (0, 0, 0), ...], [(...)]...] etc.
+            # this is an 2D RGB-tuple list of the form [[(255, 255, 255), (0, 0, 0), ...], [(...)]...] etc.
             # we will take it in chunks
             result = []
+            received = ""
             while True:
                 received = client_socket.recv(bytes_per_region_approx).decode().strip()
-                while True:
-                    if received == "done":
-                        break
-                    try:
-                        chunk = literal_eval(received)
-                        result.append(chunk)
-                        client_socket.sendall("ok".encode())
-                        break
-                    except:
-                        print("Failed to receive, trying again...")
-                        client_socket.sendall("again".encode())
-                        received = client_socket.recv(bytes_per_region_approx).decode().strip()
+                    # all chunks have been sent
                 if received == "done":
                     break
+                try:
+                    chunk = literal_eval(received)
+                    result.append(chunk)
+                    client_socket.sendall("ok".encode())
+                except:
+                    if(args.dbg):
+                        print("Failed to receive, trying again...")
+                    client_socket.sendall("again".encode())
+                        
 
             print("Received calculated region", start_region_x, end_region_x, start_region_y, end_region_y)
 
@@ -108,7 +116,8 @@ def server_thread(client_socket):
             print("Done rendering region", start_region_x, end_region_x, start_region_y, end_region_y)
 
         # if nothing is happening, just instruct to wait
-        client_socket.sendall("wait".encode())
+        # why?
+        #client_socket.sendall("wait".encode())
     except socket.error:
         client_socket.close()
         region_queue.put_nowait(region)
@@ -155,4 +164,5 @@ def main():
     
     # when app is stopped, quit
     close_graph()
+    
 easy_run(main)
