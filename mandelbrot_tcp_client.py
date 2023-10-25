@@ -6,7 +6,15 @@ from math import floor
 import socket
 from ast import literal_eval
 import random
+import argparse
 # random rgb to identify client
+
+# command line arguments
+parser = argparse.ArgumentParser(prog='TCP Mandelbrot client', usage='client -ip <IP> -port <PORT>',description='TCP Client for Mandelbrot server.')
+parser.add_argument('-ip', dest='ipadr', default="192.168.1.6", help='IP address of the server')
+parser.add_argument('-port', dest='port', default=1762, type=int, help='Port of the server')
+
+args = parser.parse_args()
 
 def clamp(num, min_value, max_value):
    return max(min(num, max_value), min_value)
@@ -44,7 +52,8 @@ def run_calculation(start_region_x, end_region_x, start_region_y, end_region_y,
                iter_steps += 1
             
             point_found_val = floor((iter_steps / max_iter_steps) * 169)
-            # should look like a pink-ish Mandelbrot...
+            
+            # color the Mandelbrot blue
             points[i - start_region_x][j - start_region_y] = (
                 clamp(floor(point_found_val * 0.9), 0, 255),           # R
                 clamp(floor(point_found_val * 1 ), 0, 255),             # G
@@ -54,71 +63,84 @@ def run_calculation(start_region_x, end_region_x, start_region_y, end_region_y,
     # return calculation
     return points
 
-# connect to server...
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# sock.connect(("str(input("Which IP to connect to? > "))", 1762))
-sock.connect(("192.168.1.4", 1762))
-sock.settimeout(15)
 
-print("Awaiting further instructions from Mandelbrot TCP server...")
-while True:
-    try: # wait for KeyboardInterrupt or something... basically app close
-
-        # 1000 bytes is enough, the render region is never that big...
-        while True:
-            received = sock.recv(1000).decode().strip()
-            # if received == "wait":
-            #     continue
-            try:
-                result = literal_eval(received)
-                sock.sendall("ok".encode())
-                break
-            except:
-                sock.sendall("again".encode())
-
-        start_region_x = result[0]
-        end_region_x = result[1]
-        start_region_y = result[2]
-        end_region_y = result[3]
-        render_scale = result[4]
-        epsilon = result[5]
-        resolution_x = result[6]
-        resolution_y = result[7]
-
-        print("Received a region to calculate:", 
-            start_region_x, end_region_x, start_region_y, end_region_y,
-            render_scale, epsilon, resolution_x, resolution_y)
+def main(): 
+    # connect to server...
+    try:
+        print("Connecting to", args.ipadr, ":", args.port)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((args.ipadr, args.port))
+        sock.settimeout(15)
+    except:
+        print("Connection timed out, closing application...")
+        return
         
-        points = run_calculation(start_region_x, end_region_x, start_region_y, end_region_y,
-                        render_scale, epsilon, resolution_x, resolution_y)
-        
-        print("Done rendering region, sending...")
-        #sock.sendall("sending".encode())
+    print("Awaiting further instructions from Mandelbrot TCP server...")
+    while True:
+        try: # wait for KeyboardInterrupt or something... basically app close
 
-        # send result in chunks
-        for chunk in points:
-            print("Sending chunk...", len(repr(chunk)))
-            sock.sendall(repr(chunk).encode())
-            # receive confirmation
-            confirm = sock.recv(16).decode().strip()
-            # if not ok, send again...
-            while confirm != "ok":
-                print("Failed to send, trying again...")
+            # 1000 bytes is enough, the render region is never that big...
+            while True:
+                
+                received = sock.recv(1000).decode().strip()
+                # if received == "wait":
+                #     continue
+                try:
+                    result = literal_eval(received)
+                    sock.sendall("ok".encode())
+                    break
+                except:
+                    print("Failed to receive region, request again...")
+                    sock.sendall("again".encode())
+
+            start_region_x = result[0]
+            end_region_x = result[1]
+            start_region_y = result[2]
+            end_region_y = result[3]
+            render_scale = result[4]
+            epsilon = result[5]
+            resolution_x = result[6]
+            resolution_y = result[7]
+
+            print("Received a region to calculate:", 
+                start_region_x, end_region_x, start_region_y, end_region_y,
+                render_scale, epsilon, resolution_x, resolution_y)
+            
+            points = run_calculation(start_region_x, end_region_x, start_region_y, end_region_y,
+                            render_scale, epsilon, resolution_x, resolution_y)
+            
+            print("Done rendering region, sending...")
+            #sock.sendall("sending".encode())
+
+            # send result in chunks
+            confirm = ""
+            for chunk in points:
+                print("Sending chunk...", len(repr(chunk)))
                 sock.sendall(repr(chunk).encode())
-                print("Sent again...")
+                # receive confirmation
+                print("Waiting for confirmation...")
                 confirm = sock.recv(16).decode().strip()
+              
+                # if not ok, send again...
+                
+                if confirm != "ok":
+                    print("Failed to send, trying again...")
+                while confirm != "ok":
+                    sock.sendall(repr(chunk).encode())
+                    confirm = sock.recv(16).decode().strip()
 
-        # send 'done' at the end
-        #for _ in range(4):
-        sock.sendall("done".encode())
+            # send 'done' at the end
+            sock.sendall("done".encode())
 
-        # wait for more!...
-        print("Sent region over...")
-        print("Awaiting further instructions from Mandelbrot TCP server...")
+            # wait for more!...
+            print("Sent region over...")
+            print("Awaiting further instructions from Mandelbrot TCP server...")
 
-    except socket.error:
-        sock.close()
-        print("Connection terminated, shutting down...")
-        break
-    except Exception as ex:
-        continue
+        except socket.error:
+            sock.close()
+            print("Connection terminated, shutting down...")
+            break
+        except Exception as ex:
+            continue
+
+main()
