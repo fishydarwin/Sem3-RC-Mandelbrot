@@ -5,8 +5,6 @@
 from math import floor
 import socket
 from ast import literal_eval
-import random
-# random rgb to identify client
 
 def clamp(num, min_value, max_value):
    return max(min(num, max_value), min_value)
@@ -57,7 +55,7 @@ def run_calculation(start_region_x, end_region_x, start_region_y, end_region_y,
 # connect to server...
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # sock.connect(("str(input("Which IP to connect to? > "))", 1762))
-sock.connect(("192.168.1.4", 1762))
+sock.connect(("127.0.0.1", 1762))
 sock.settimeout(15)
 
 print("Awaiting further instructions from Mandelbrot TCP server...")
@@ -109,7 +107,6 @@ while True:
                 confirm = sock.recv(16).decode().strip()
 
         # send 'done' at the end
-        #for _ in range(4):
         sock.sendall("done".encode())
 
         # wait for more!...

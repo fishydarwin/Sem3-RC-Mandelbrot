@@ -115,15 +115,7 @@ def server_thread(client_socket):
         print("Connection to terminated, asking someone else to finish task...")
         return
 
-def main():
-    # initialize EasyGraphics window
-    init_graph(resolution_x, resolution_y)
-    # we will render everything pixel-by-pixel
-    set_render_mode(RenderMode.RENDER_MANUAL)
-
-    print("Start Mandelbrot TCP Server")
-
-    # fill in queue with initial values
+def fill_queue():
     for region_i in range(int(resolution_x / (resolution_x * chunk_size))):
         for region_j in range(int(resolution_y / (resolution_y * chunk_size))):
             # enqueue a region rectangle based on chunk_size...
@@ -140,8 +132,19 @@ def main():
                     resolution_y
                 )
             )
+    print("Queue Size (Region Count)", region_queue.qsize(), 
+          "Approximate Max Bytes per Region", bytes_per_region_approx)
 
-    print("Queue Size (Region Count)", region_queue.qsize(), "Approximate Max Bytes per Region", bytes_per_region_approx)
+def main():
+    # initialize EasyGraphics window
+    init_graph(resolution_x, resolution_y)
+    # we will render everything pixel-by-pixel
+    set_render_mode(RenderMode.RENDER_MANUAL)
+
+    print("Start Mandelbrot TCP Server")
+
+    # fill in queue with initial values
+    fill_queue()
 
     # initialize socket off thread - this needs to be done to allow for rendering
     Thread(target=start_listen_thread, daemon=True).start()
@@ -155,4 +158,5 @@ def main():
     
     # when app is stopped, quit
     close_graph()
+
 easy_run(main)
