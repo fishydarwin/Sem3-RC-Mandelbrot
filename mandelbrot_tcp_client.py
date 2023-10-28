@@ -11,8 +11,9 @@ import argparse
 
 # command line arguments
 parser = argparse.ArgumentParser(prog='TCP Mandelbrot client', usage='client -ip <IP> -port <PORT>',description='TCP Client for Mandelbrot server.')
-parser.add_argument('-ip', dest='ipadr', default="192.168.1.6", help='IP address of the server')
+parser.add_argument('-ip', dest='ipadr', default="192.168.1.3", help='IP address of the server')
 parser.add_argument('-port', dest='port', default=1762, type=int, help='Port of the server')
+
 
 args = parser.parse_args()
 
@@ -114,6 +115,7 @@ def main():
 
             # send result in chunks
             confirm = ""
+            error_count = 0
             for chunk in points:
                 print("Sending chunk...", len(repr(chunk)))
                 sock.sendall(repr(chunk).encode())
@@ -121,14 +123,32 @@ def main():
                 print("Waiting for confirmation...")
                 confirm = sock.recv(16).decode().strip()
               
-                # if not ok, send again...
-                
-                if confirm != "ok":
-                    print("Failed to send, trying again...")
+              
                 while confirm != "ok":
+                    error_count += 1
+                    print(f"Trying to send chunk again... ({error_count})", len(repr(chunk)))
                     sock.sendall(repr(chunk).encode())
+                    print("Waiting for confirmation...")
                     confirm = sock.recv(16).decode().strip()
-
+                    
+                    if error_count >= 10 :
+                        break
+                
+                if error_count >= 10 :
+                    break
+                
+            # sometimes the client and the server just get out of sync and there's no other way to recover
+            # solution? connect to another server thread and render the next region
+            # yes that means the data we just rendered became useless
+            if confirm != "ok":
+                print("Failed to send render, reconnecting...")
+                sock.close()
+                print("Connecting to", args.ipadr, ":", args.port)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((args.ipadr, args.port))
+                sock.settimeout(15)
+                continue
+            
             # send 'done' at the end
             sock.sendall("done".encode())
 
