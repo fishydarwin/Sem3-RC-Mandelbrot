@@ -7,7 +7,7 @@
 /*
 Keep in mind the Python implementation is better, this is just me practicing with socket in C/C++
 Initially, the code I wrote only worked in Linux, but I was able to add Windows support thanks to
-		---	     https://gist.github.com/FedericoPonzi/2a37799b6c601cce6c1b     ---
+		---	 https://gist.github.com/FedericoPonzi/2a37799b6c601cce6c1b     ---
 		--- https://gist.github.com/willeccles/3ba0741143b573b74b1c0a7aea2bdb40 ---
 
 one problem : for some reason, the Windows client does not close if you run it after everything has been rendered
